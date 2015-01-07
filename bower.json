@@ -1,13 +1,28 @@
 {
   "name": "pscsnake",
-  "version": "1.0.0",
-  "moduleType": [
-    "node"
-  ],
+  "version": "0.0.1",
   "ignore": [
     "**/.*",
     "node_modules",
     "bower_components",
-    "output"
-  ]
+    "output",
+    "test",
+    "tests"
+  ],
+  "authors": [
+    "minikomi <nerdfunk@gmail.com>"
+  ],
+  "description": "trying snake in psc",
+  "keywords": [
+    "snake"
+  ],
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "purescript-free-canvas": "~0.1.1",
+    "purescript-math": "~0.1.0",
+    "purescript-random": "~0.1.1",
+    "purescript-maybe":                "*",
+    "purescript-simple-dom":           "waterson/purescript-simple-dom"
+  }
 }
