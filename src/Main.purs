@@ -294,7 +294,7 @@ keypress st event = do
                           37 | w.snake.direction /= R -> L
                           _  -> w.snake.direction
 
-      writeSTRef st $ w {nextDirection = newDirection}
+      writeSTRef st $ w {nextDirection = newDirection, untilStep = 0}
       return unit
 
     Dead | (code == 32) -> do
