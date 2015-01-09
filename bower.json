@@ -19,11 +19,12 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "purescript-free-canvas": "~0.1.1",
-    "purescript-math": "~0.1.0",
-    "purescript-random": "~0.1.1",
-    "purescript-maps": "*", 
-    "purescript-maybe":                "*",
-    "purescript-simple-dom":           "waterson/purescript-simple-dom"
+    "purescript-free-canvas" : "~0.1.1",
+    "purescript-math"        : "~0.1.0",
+    "purescript-random"      : "~0.1.1",
+    "purescript-maps"        : "*",
+    "purescript-maybe"       : "*",
+    "purescript-foreign"     : "*",
+    "purescript-simple-dom"  : "waterson/purescript-simple-dom"
   }
 }

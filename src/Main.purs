@@ -1,4 +1,6 @@
-module Main where
+module Snake.Main where
+
+import Snake.Types
 
 import Control.Monad.Eff
 import Control.Monad.Eff.Random
@@ -9,16 +11,18 @@ import Data.Map(fromList, toList, Map(), update)
 import Data.Tuple
 import Data.Maybe
 import Data.Maybe.Unsafe
-import Control.Monad
+import Control.Monad(foldM, when)
 import Math (floor)
 
-import Data.DOM.Simple.Events
+import Data.DOM.Simple.Events(addKeyboardEventListener, KeyboardEventType(KeydownEvent), keyCode)
 import Data.DOM.Simple.Types
 import Data.DOM.Simple.Window(setInterval, globalWindow)
 import Graphics.Canvas (Canvas(), Context2D(), TextMetrics(), getCanvasElementById, getContext2D, setCanvasWidth, setCanvasHeight)
 import Graphics.Canvas.Free
 
 import Debug.Trace
+
+-- Constants
 
 worldSize :: Number
 worldSize = 13
@@ -35,54 +39,7 @@ startLevel = 10
 maxStep :: Number
 maxStep = 20
 
-data Direction = Null | U | R | D | L
-
-instance showDirection :: Show Direction where
-  show U = "U"
-  show R = "R"
-  show D = "D"
-  show L = "L"
-
-instance eqDirection :: Eq Direction where
-  (==) U U = true
-  (==) R R = true
-  (==) D D = true
-  (==) L L = true
-  (==) _ _ = false
-  (/=) d1 d2 = not $ d1 == d2
-
-data GameState = Alive | Dead
-
-instance eqGameState :: Eq GameState where
-  (==) Alive Alive = true
-  (==) Dead Dead   = true
-  (==) _    _      = false
-  (/=) g1 g2 = not $ g1 == g2
-
-data Point = Point { 
-    x :: Number
-  , y :: Number
-  }
-
-getX :: Point -> Number
-getX (Point p) = p.x
-
-getY :: Point -> Number
-getY (Point p) = p.y
-
-instance showPoint :: Show Point where
-  show p = "{"  ++ (show $ getX p) ++ " / " ++ (show $ getY p) ++ "}"
-
-instance eqPoint :: Eq Point where
-  (==) (Point p1) (Point p2) = (p1.x == p2.x) && (p1.y == p2.y)
-  (/=) p1 p2 = not $ p1 == p2
-
-instance ordPoint :: Ord Point where
-  compare (Point p1) (Point p2) = case compare p1.x p2.x of
-                                       EQ -> compare p1.y p2.y
-                                       o  -> o
-
-type Food = Point
+-- Generator Functions
 
 randomFood :: forall e. Number -> Number -> Snake -> Eff ( random :: Random | e ) Food
 randomFood w h s = do
@@ -98,27 +55,9 @@ randomFood w h s = do
   where randomRange lo hi = (\n -> lo + n * (hi - lo)) <$> random
         randomSign = (\n -> if n < 0.5 then (-1) else 1) <$> random
 
-type Snake = {
-    body :: [Point]
-  , direction :: Direction
-  }
-
 initialSnake :: Number -> Number -> Snake
 initialSnake w h = {body: initialBody, direction: Null}
   where initialBody  = [Point {x: floor(w/2), y: floor(h/2)}]
-
-type DeathPoints = Map Point Number
-
-type World = {
-    dps  :: DeathPoints
-  , food :: Food
-  , snake :: Snake
-  , state :: GameState
-  , level :: Number
-  , untilStep :: Number
-  , nextDirection :: Direction
-  }
-
 
 initialWorld :: forall e. Number -> Number -> Eff ( random :: Random, trace :: Trace | e ) World
 initialWorld w h = do
@@ -138,11 +77,15 @@ initialWorld w h = do
          }
 
 
+-- Drawing
+
+drawSnakePart :: Unit -> Point -> Graphics Unit
 drawSnakePart _ bodypart = do rect $ { x: (getX bodypart * blockSize)
                                      , y: (getY bodypart * blockSize) 
                                      , w: blockSize
                                      , h: blockSize }
 
+drawSnake :: World -> Graphics Unit
 drawSnake w = do
     beginPath
     setFillStyle "#00FFFF"
@@ -151,6 +94,7 @@ drawSnake w = do
     fill
     closePath
 
+drawFood :: World -> Graphics Unit
 drawFood w = do
   let f = w.food
   beginPath
@@ -164,6 +108,7 @@ drawFood w = do
   fill
   closePath
 
+centerText :: String -> String -> String -> Number -> Graphics Unit
 centerText style font message yOffset = do
   beginPath
   setFillStyle style
@@ -171,11 +116,13 @@ centerText style font message yOffset = do
   txtsize <- measureText message
   fillText message ((canvasSize - txtsize.width)/2) yOffset
 
+drawGameOver :: Graphics Unit
 drawGameOver = do
   centerText "#222" "40px Serif" "GAME OVER" ((canvasSize/2) + 20)
   centerText "#222" "16px Serif" "Press Space to Try Again" ((canvasSize/2) + 40)
   closePath
 
+clear :: Graphics Unit
 clear = do
   beginPath
   setFillStyle "#f2f2f2"
@@ -183,20 +130,13 @@ clear = do
   fill
   closePath
 
+-- single color range (green)
+-- colorbrewer2
+colorRange :: [String]
+colorRange = ["#f7fcf5" ,"#e5f5e0" ,"#c7e9c0" ,"#a1d99b" ,"#74c476" ,"#41ab5d" ,"#238b45" ,"#006d2c" ,"#00441b"]
 
--- colorbrewer single hue 10 color range (green)
-colorRange = ["#f7fcf5"
-             ,"#e5f5e0"
-             ,"#c7e9c0"
-             ,"#a1d99b"
-             ,"#74c476"
-             ,"#41ab5d"
-             ,"#238b45"
-             ,"#006d2c"
-             ,"#00441b"]
-
+drawDeathPoint :: Number -> Number -> Unit -> Tuple Point Number -> Graphics Unit
 drawDeathPoint minv maxv _ p = do
-
   let colorIndex = floor $ (((snd p)- minv) / maxv) * (length colorRange - 1)
       color      = fromJust $ colorRange !! colorIndex
 
@@ -227,7 +167,9 @@ drawWorld ctx w = runGraphics ctx do
     case w.state of
          Alive -> do drawSnake w
                      drawFood w
-         Dead  -> do drawGameOver
+         _     -> do drawGameOver
+
+-- Update World
 
 updateWorld :: forall s e. World -> Eff (st :: ST s, random :: Random, trace :: Debug.Trace.Trace | e) World
 updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w.level}
@@ -239,26 +181,25 @@ updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w
                     dir' = if w.nextDirection /= Null then w.nextDirection else s.direction
                     h'   = case dir' of
                                   U -> Point {x: getX h    , y: getY h - 1}
-                                  R -> Point {x: getX h + 1, y: getY h}
+                                  R -> Point {x: getX h + 1, y: getY h    }
                                   D -> Point {x: getX h    , y: getY h + 1}
-                                  L -> Point {x: getX h - 1, y: getY h}
+                                  L -> Point {x: getX h - 1, y: getY h    }
                                   _ -> h
 
                     ateFood = h' == w.food
+                    tail'    = if ateFood then body else deleteAt (length body - 1) 1 body
+                    snake'  = s {body = (h':tail'), direction = dir'}
+                    state'  = if (getX h' <  0         ||
+                                  getX h' >= worldSize ||
+                                  getY h' <  0         ||
+                                  getY h' >= worldSize ||
+                                  elemIndex h' body > 0) then Dead else Alive
 
-                    t      = if ateFood then body else deleteAt (length body - 1) 1 body
-                    snake' = s {body = (h':t), direction = dir'}
-                    state' = if (getX h' <  0         ||
-                                 getX h' >= worldSize ||
-                                 getY h' <  0         ||
-                                 getY h' >= worldSize ||
-                                 elemIndex h' body > 0) then Dead else Alive
-
-                    level' = if (ateFood && w.level < 10) then w.level + 1 else w.level
-                    dps    = w.dps :: Map Point Number
-                    dps'   = case state' of 
-                                    Alive -> w.dps
-                                    Dead  -> update (\n -> Just (n + 1) :: Maybe Number) h dps
+                    level'  = if (ateFood && w.level < 10) then w.level + 1 else w.level
+                    dps     = w.dps :: Map Point Number
+                    dps'    = case state' of 
+                                     Alive -> w.dps
+                                     Dead  -> update (\n -> Just (n + 1) :: Maybe Number) h dps
 
                   food' <- if ateFood then randomFood worldSize worldSize snake'
                                       else return $ w.food
@@ -271,8 +212,12 @@ updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w
                               level = level'}
 
 
+-- Tick Handling 
 
-tick :: forall s e. Context2D -> STRef s World -> Eff (st :: ST s, random :: Random, canvas :: Canvas, trace :: Debug.Trace.Trace | e ) Unit
+tick :: forall s e. Context2D -> STRef s World -> Eff (st     :: ST s,
+                                                       random :: Random,
+                                                       canvas :: Canvas,
+                                                       trace  :: Debug.Trace.Trace | e ) Unit
 tick ctx st = do
   w  <- readSTRef st
   when (w.state == Alive) do w' <- updateWorld w
@@ -281,7 +226,12 @@ tick ctx st = do
 
   drawWorld ctx w
 
-keypress :: forall s e. STRef s World -> DOMEvent -> Eff (st :: ST s, dom :: DOM, random :: Random, trace :: Debug.Trace.Trace | e) Unit
+-- Key Handling 
+
+keypress :: forall s e. STRef s World -> DOMEvent -> Eff (st     :: ST s, 
+                                                          dom    :: DOM,
+                                                          random :: Random,
+                                                          trace  :: Debug.Trace.Trace | e) Unit
 keypress st event = do
   w <- readSTRef st
   code <- keyCode event
@@ -301,8 +251,7 @@ keypress st event = do
       let s = initialSnake worldSize worldSize
 
       f <- randomFood worldSize worldSize s
-      writeSTRef st $ w {
-                          food          = f
+      writeSTRef st $ w { food          = f
                         , snake         = s
                         , state         = Alive
                         , level         = startLevel
