@@ -6,6 +6,7 @@ import Data.Map
 data Direction = Null | U | R | D | L
 
 instance showDirection :: Show Direction where
+  show Null = "Null"
   show U = "U"
   show R = "R"
   show D = "D"
@@ -16,6 +17,7 @@ instance eqDirection :: Eq Direction where
   (==) R R = true
   (==) D D = true
   (==) L L = true
+  (==) Null Null = true
   (==) _ _ = false
   (/=) d1 d2 = not $ d1 == d2
 

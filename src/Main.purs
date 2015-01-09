@@ -34,10 +34,10 @@ canvasSize :: Number
 canvasSize = (worldSize * blockSize)
 
 startLevel :: Number
-startLevel = 10
+startLevel = 1
 
 maxStep :: Number
-maxStep = 20
+maxStep = 5
 
 -- Generator Functions
 
@@ -80,10 +80,10 @@ initialWorld w h = do
 -- Drawing
 
 drawSnakePart :: Unit -> Point -> Graphics Unit
-drawSnakePart _ bodypart = do rect $ { x: (getX bodypart * blockSize)
-                                     , y: (getY bodypart * blockSize) 
-                                     , w: blockSize
-                                     , h: blockSize }
+drawSnakePart _ bodypart = do rect $ { x: (getX bodypart * blockSize) + 2
+                                     , y: (getY bodypart * blockSize) + 2
+                                     , w: blockSize - 2
+                                     , h: blockSize - 2}
 
 drawSnake :: World -> Graphics Unit
 drawSnake w = do
@@ -98,7 +98,7 @@ drawFood :: World -> Graphics Unit
 drawFood w = do
   let f = w.food
   beginPath
-  setFillStyle "#00FF00"
+  setFillStyle "#22ff44"
   arc { x: ((getX f) * blockSize) + blockSize / 2,
         y: ((getY f) * blockSize) + blockSize / 2,
         r: blockSize / 2, 
@@ -174,6 +174,7 @@ drawWorld ctx w = runGraphics ctx do
 updateWorld :: forall s e. World -> Eff (st :: ST s, random :: Random, trace :: Debug.Trace.Trace | e) World
 updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w.level}
            else do 
+                  print $ w.nextDirection
                   let 
                     s    = w.snake
                     body = s.body
@@ -195,7 +196,7 @@ updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w
                                   getY h' >= worldSize ||
                                   elemIndex h' body > 0) then Dead else Alive
 
-                    level'  = if (ateFood && w.level < 10) then w.level + 1 else w.level
+                    level'  = if (ateFood && w.level < maxStep) then w.level + 1 else w.level
                     dps     = w.dps :: Map Point Number
                     dps'    = case state' of 
                                      Alive -> w.dps
@@ -204,11 +205,14 @@ updateWorld w = if w.untilStep >= 0 then return $ w {untilStep = w.untilStep - w
                   food' <- if ateFood then randomFood worldSize worldSize snake'
                                       else return $ w.food
 
+                  print $ dir' 
+
                   return $ w {dps   = dps',
                               snake = snake',
                               state = state',
                               food  = food',
                               untilStep = maxStep,
+                              nextDirection = Null,
                               level = level'}
 
 
